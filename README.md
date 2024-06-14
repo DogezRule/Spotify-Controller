@@ -1,3 +1,5 @@
+# Please do not do this currently, I have realized that the refresh token authentication does not work and it too much work
+
 # ESP32 Spotify Controller
 
 ## Project Overview
