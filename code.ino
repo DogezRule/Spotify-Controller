@@ -8,8 +8,8 @@
 #include <WiFiUdp.h>
 
 // Spotify API credentials
-const char* client_id = "6bc180be928646868d6ba8fa858c0d2f";
-const char* client_secret = "50eeb8eb996c42b0bbcaba6e23a2caf6";
+const char* client_id = "put_client_id_here";
+const char* client_secret = "put_client_secret_here";
 String refresh_token;
 
 // GPIO pins for switches
