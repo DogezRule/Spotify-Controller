@@ -8,8 +8,8 @@
 #include <WiFiUdp.h>
 
 // Spotify API credentials
-const char* client_id = "put_client_id_here";
-const char* client_secret = "put_client_secret_here";
+const char* client_id = "client_id";
+const char* client_secret = "client_secret";
 String refresh_token;
 
 // GPIO pins for switches
@@ -37,6 +37,12 @@ const unsigned long debounceDelay = 500; // milliseconds
 
 WebServer server(80);
 HTTPClient httpClient;
+
+bool isPlaying = false;
+unsigned long lastPlaybackStateFetch = 0;
+const unsigned long playbackStateFetchInterval = 5000; // 5 seconds
+unsigned long lastWiFiCheck = 0;
+const unsigned long wifiCheckInterval = 1000; // 1 second
 
 void IRAM_ATTR nextSongISR() {
   unsigned long currentTime = millis();
@@ -103,12 +109,23 @@ void setup() {
   Serial.println("HTTP server started");
 
   // Placeholder for access token
-  getAccessToken();
+  prefetchAccessToken();
 }
 
 void loop() {
   server.handleClient();
   ArduinoOTA.handle();
+
+  unsigned long currentTime = millis();
+  if (currentTime - lastPlaybackStateFetch > playbackStateFetchInterval) {
+    isPlaying = fetchPlaybackState();
+    lastPlaybackStateFetch = currentTime;
+  }
+
+  if (currentTime - lastWiFiCheck > wifiCheckInterval) {
+    checkWiFiConnection();
+    lastWiFiCheck = currentTime;
+  }
 
   if (nextSongFlag) {
     nextSongFlag = false;
@@ -124,6 +141,18 @@ void loop() {
     playPauseFlag = false;
     Serial.println("Play/Pause button pressed");
     controlSpotify("playpause");
+  }
+}
+
+void checkWiFiConnection() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Wi-Fi disconnected. Reconnecting...");
+    WiFi.reconnect();
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      Serial.print(".");
+    }
+    Serial.println("Reconnected to Wi-Fi");
   }
 }
 
@@ -182,6 +211,16 @@ void handleCallback() {
   }
 }
 
+void prefetchAccessToken() {
+  if (refresh_token == "") {
+    Serial.println("Refresh token not available. Please log in first.");
+    return;
+  }
+
+  Serial.println("Prefetching access token...");
+  getAccessToken();
+}
+
 void getAccessToken() {
   if (refresh_token == "") {
     Serial.println("Refresh token not available. Please log in first.");
@@ -197,7 +236,13 @@ void getAccessToken() {
                     + "&client_id=" + String(client_id) 
                     + "&client_secret=" + String(client_secret);
 
+  unsigned long startTime = millis();  // Start timing
   int httpResponseCode = httpClient.POST(postData);
+  unsigned long endTime = millis();    // End timing
+
+  Serial.print("HTTP POST took: ");
+  Serial.print(endTime - startTime);
+  Serial.println("ms");
 
   if (httpResponseCode == 200) {
     String response = httpClient.getString();
@@ -228,8 +273,9 @@ void controlSpotify(String action) {
     url = String(player_url) + "/previous";
     method = "POST";
   } else if (action == "playpause") {
-    // Get the current playback state
-    String playPauseAction = getPlaybackState() ? "pause" : "play";
+    // Use the pre-fetched playback state
+    String playPauseAction = isPlaying ? "pause" : "play";
+    isPlaying = !isPlaying;  // Toggle the state
     url = String(player_url) + "/" + playPauseAction;
     method = "PUT";
   }
@@ -238,12 +284,20 @@ void controlSpotify(String action) {
   httpClient.addHeader("Authorization", "Bearer " + access_token);
   httpClient.addHeader("Content-Length", "0");  // Ensuring the Content-Length header is present
 
+  unsigned long startTime = millis();  // Start timing
   int httpResponseCode = -1;
   if (method == "POST") {
     httpResponseCode = httpClient.POST("");
   } else if (method == "PUT") {
     httpResponseCode = httpClient.PUT("");
   }
+  unsigned long endTime = millis();    // End timing
+
+  Serial.print("HTTP ");
+  Serial.print(method);
+  Serial.print(" took: ");
+  Serial.print(endTime - startTime);
+  Serial.println("ms");
 
   if (httpResponseCode == 204) {
     Serial.println("Spotify control successful: " + action);
@@ -260,11 +314,15 @@ void controlSpotify(String action) {
   httpClient.end();
 }
 
-bool getPlaybackState() {
+bool fetchPlaybackState() {
   httpClient.begin(String(player_url) + "/currently-playing");
   httpClient.addHeader("Authorization", "Bearer " + access_token);
 
+  unsigned long startTime = millis();  // Start timing
   int httpResponseCode = httpClient.GET();
+  unsigned long endTime = millis();    // End timing
+
+
 
   if (httpResponseCode == 200) {
     String response = httpClient.getString();
