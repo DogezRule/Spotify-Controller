@@ -349,5 +349,34 @@ I created a PCB that controls Spotify playback using an ESP32 and a few Cherry M
 7. Go back to the Spotify dashboard, edit the app, and change the callback URL to `http://your_esp32_ip/callback`.
 8. Return to the ESP32 webpage on the IP address and press "Log in with Spotify". After you log in, it should be set up.
 
-## Conclusion
-Your ESP32 Spotify Controller should now be set up and working. Enjoy controlling your music with the press of a button!
+### Resetting the Network
+The only way to reset the network it's connected to is to reset the EEPROM. Do that at your own risk:
+
+```cpp
+#include <EEPROM.h>
+
+#define EEPROM_SIZE 512 // Adjust this value to the size of EEPROM you are using
+
+void clearEEPROM() {
+  // Begin EEPROM with the size specified
+  EEPROM.begin(EEPROM_SIZE);
+  // Write 0 to each byte of the EEPROM
+  for (int i = 0; i < EEPROM_SIZE; i++) {
+    EEPROM.write(i, 0);
+  }
+  // Commit the changes to the EEPROM
+  EEPROM.commit();
+  // End the EEPROM to free resources
+  EEPROM.end();
+}
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println("Clearing EEPROM...");
+  clearEEPROM();
+  Serial.println("EEPROM Cleared.");
+}
+
+void loop() {
+  // Your main code
+}
